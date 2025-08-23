@@ -1,6 +1,8 @@
 #-*- coding:utf-8 -*-    --------------Ashare 股票行情数据双核心版( https://github.com/mpquant/Ashare ) 
-import json,requests,datetime;      import pandas as pd  #
+import json,requests,datetime,time;
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import pandas as pd  #
 #腾讯日线
 def get_price_day_tx(code, end_date='', count=10, frequency='1d'):     #日线获取  
     unit='week' if frequency in '1w' else 'month' if frequency in '1M' else 'day'     #判断日线，周线，月线
@@ -37,7 +39,7 @@ def get_price_sina(code, end_date='', count=10, frequency='60m'):    #新浪全�
         count=count+(datetime.datetime.now()-end_date).days//unit            #结束时间到今天有多少天自然日(肯定 >交易日)        
         #print(code,end_date,count)    
     URL=f'http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={code}&scale={ts}&ma=5&datalen={count}' 
-    dstr= json.loads(requests.get(URL).content);       
+    dstr= json.loads(requests.get(URL).content);
     #df=pd.DataFrame(dstr,columns=['day','open','high','low','close','volume'],dtype='float') 
     df= pd.DataFrame(dstr,columns=['day','open','high','low','close','volume'])
     df['open'] = df['open'].astype(float); df['high'] = df['high'].astype(float);                          #转换数据类型
@@ -58,12 +60,96 @@ def get_price(code, end_date='',count=10, frequency='1d', fields=[]):        #�
          if frequency in '1m': return get_price_min_tx(xcode,end_date=end_date,count=count,frequency=frequency)
          try:    return get_price_sina(  xcode,end_date=end_date,count=count,frequency=frequency)   #主力   
          except: return get_price_min_tx(xcode,end_date=end_date,count=count,frequency=frequency)   #备用
-        
-if __name__ == '__main__':    
-    df=get_price('sh000001',frequency='1d',count=10)      #支持'1d'日, '1w'周, '1M'月  
-    print('上证指数日线行情\n',df)
-    
-    df=get_price('000001.XSHG',frequency='15m',count=10)  #支持'1m','5m','15m','30m','60m'
-    print('上证指数分钟线\n',df)
 
-# Ashare 股票行情数据( https://github.com/mpquant/Ashare ) 
+
+
+def get_a_stock_list():
+    """
+    获取A股股票列表
+    """
+    # 通过 sina 获取股票列表的一种方法
+    stock_list = []
+
+    # 沪市A股 (sh60xxxx, sh68xxxx)
+    # 深市A股 (sz00xxxx, sz30xxxx, sz002xxxx)
+    prefixes = [
+        'sh60',  # 沪市主板
+        'sz00',  # 深市主板/中小板
+        'sz002'  # 深市中小板
+    ]
+
+    # 或者通过网络接口获取完整列表
+    try:
+        i = 1
+        while True:
+            start_time = time.perf_counter()
+            url = f"http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page={i}&num=200&sort=symbol&asc=1&node=hs_a"
+            response = requests.get(url)
+            data = response.json()
+            end_time = time.perf_counter()
+            if end_time - start_time <1 :
+                time.sleep(0.5)
+            if len(data) == 0:
+                break
+            else:i=i+1
+            stock_list =stock_list + [item['symbol'] for item in data]
+            print(f"获取到 {len(stock_list)} 条 总数据")
+        stock_list = [stock for stock in stock_list if stock.startswith(tuple(prefixes))]
+        print(f"实际获取到 {len(stock_list)} 条 总数据")
+        return stock_list
+    except:
+        # 备用方案：手动构建部分代码
+        stock_codes = []
+        # 示例：添加部分股票代码
+        for i in range(600000, 600100):  # 沪市部分股票
+            stock_codes.append(f"sh{i}")
+        for i in range(2000, 2100):  # 深市部分股票
+            stock_codes.append(f"sz002{i}")
+        return stock_codes
+
+
+# 获取所有股票代码
+# stock_list = get_a_stock_list()
+# print(f"获取到 {len(stock_list)} 只股票")
+
+def get_all_stocks_data(stock_list, frequency='1d', count=10, max_workers=10):
+    """
+    批量获取所有股票走势数据
+
+    Args:
+        stock_list: 股票代码列表
+        frequency: K线周期 ('1d','1w','1M','1m','5m','15m','30m','60m')
+        count: 获取数据条数
+        max_workers: 最大并发线程数
+
+    Returns:
+        dict: 股票代码为key，DataFrame为value的字典
+    """
+    stock_data = {}
+    end_date = ''
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # 提交所有任务
+        future_to_stock = {
+            executor.submit(get_price, stock,end_date,  count,frequency): stock
+            for stock in stock_list[:10] # 先测试前100只股票
+        }
+
+        # 收集结果
+        for future in as_completed(future_to_stock):
+            stock_code = future_to_stock[future]
+            df=future.result()
+            if df is not None and not df.empty:
+                stock_data[stock_code] = df
+            else:
+                print(f"未获取到 {stock_code} 的数据")
+
+            # 添加延时避免请求过于频繁
+            time.sleep(0.1)
+
+    return stock_data
+if __name__ == '__main__':
+
+    df=get_a_stock_list()
+    print('所有股票代码\n',df)
+
+

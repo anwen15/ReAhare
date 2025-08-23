@@ -1,6 +1,6 @@
 
 
-
+#项目来源：github/mpquant/Ashare
 
 ### 先看一个最简单的例子 [Demo1.py](https://github.com/mpquant/Ashare/blob/main/Demo1.py)
 
@@ -90,7 +90,6 @@ plt.show()
 
 ----------------------------------------------------
 
-![加入群聊](https://github.com/mpquant/Ashare/blob/main/img/qrcode.png) 
 
 > #### 股市程序化交易大群, 圈内大咖量化策略分享
 > #### 全是干货，无闲聊 ，物以类聚,人以群分，一起感受思维碰撞的力量!

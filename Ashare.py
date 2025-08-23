@@ -1,8 +1,14 @@
 #-*- coding:utf-8 -*-    --------------Ashare 股票行情数据双核心版( https://github.com/mpquant/Ashare ) 
 import json,requests,datetime,time;
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from openpyxl import *
 
 import pandas as pd  #
+from IPython.utils import data
+
+
 #腾讯日线
 def get_price_day_tx(code, end_date='', count=10, frequency='1d'):     #日线获取  
     unit='week' if frequency in '1w' else 'month' if frequency in '1M' else 'day'     #判断日线，周线，月线
@@ -61,6 +67,42 @@ def get_price(code, end_date='',count=10, frequency='1d', fields=[]):        #�
          try:    return get_price_sina(  xcode,end_date=end_date,count=count,frequency=frequency)   #主力   
          except: return get_price_min_tx(xcode,end_date=end_date,count=count,frequency=frequency)   #备用
 
+def  save_stock_data(df,filename=None, version=1.0, folder="stock_data"):
+    if df is None:
+        print("数据为空，无法保存")
+        return None
+
+    # 创建文件夹（如果不存在）
+    Path(folder).mkdir(parents=True, exist_ok=True)
+
+    # 如果没有指定文件名，则根据股票代码或时间生成文件名
+    if filename is None:
+        filename = f"stock_data_{version}.xlsx"
+    # 构建完整路径
+    filepath = os.path.join(folder, filename)
+    try:
+        # 保存为CSV文件
+        if isinstance(df, dict):
+            # 创建Excel写入器
+            with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+                for code, data_df in df.items():
+                    if data_df is not None and not data_df.empty:
+                        # 将每只股票数据保存为一个工作表
+                        # 将股票代码添加为数据列
+                        data_df_with_code = data_df.copy()
+                        data_df_with_code.insert(0, 'code', code)
+                        sheet_name = code[:31]  # Excel工作表名称限制为31个字符
+                        data_df_with_code.to_excel(writer, sheet_name=code)
+                        print(f"{code} 的数据已保存至工作表 {sheet_name}")
+
+            print(f"所有股票数据已保存至 {filepath}")
+            return filepath
+        print(f"数据已保存至 {filepath}")
+        return filepath
+    except Exception as e:
+        print(f"保存文件时出错: {e}")
+        return None
+
 
 
 def get_a_stock_list():
@@ -89,7 +131,7 @@ def get_a_stock_list():
             end_time = time.perf_counter()
             if end_time - start_time <1 :
                 time.sleep(0.5)
-            if len(data) == 0:
+            if len(data) == 0 or len(stock_list)>=500:
                 break
             else:i=i+1
             stock_list =stock_list + [item['symbol'] for item in data]
@@ -98,13 +140,7 @@ def get_a_stock_list():
         print(f"实际获取到 {len(stock_list)} 条 总数据")
         return stock_list
     except:
-        # 备用方案：手动构建部分代码
         stock_codes = []
-        # 示例：添加部分股票代码
-        for i in range(600000, 600100):  # 沪市部分股票
-            stock_codes.append(f"sh{i}")
-        for i in range(2000, 2100):  # 深市部分股票
-            stock_codes.append(f"sz002{i}")
         return stock_codes
 
 
@@ -151,5 +187,7 @@ if __name__ == '__main__':
 
     df=get_a_stock_list()
     print('所有股票代码\n',df)
+    df=get_all_stocks_data(df)
+    save_stock_data( df)
 
 

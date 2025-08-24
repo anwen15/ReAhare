@@ -88,11 +88,8 @@ def  save_stock_data(df,filename=None, version=1.0, folder="stock_data"):
                 for code, data_df in df.items():
                     if data_df is not None and not data_df.empty:
                         # 将每只股票数据保存为一个工作表
-                        # 将股票代码添加为数据列
-                        data_df_with_code = data_df.copy()
-                        data_df_with_code.insert(0, 'code', code)
                         sheet_name = code[:31]  # Excel工作表名称限制为31个字符
-                        data_df_with_code.to_excel(writer, sheet_name=code)
+                        data_df.to_excel(writer, sheet_name=code)
                         print(f"{code} 的数据已保存至工作表 {sheet_name}")
 
             print(f"所有股票数据已保存至 {filepath}")
@@ -104,6 +101,41 @@ def  save_stock_data(df,filename=None, version=1.0, folder="stock_data"):
         return None
 
 
+def get_stock_data(filename="stock_data_1.0.xlsx",folder="stock_data", stock_codes=None):
+    # 构建完整路径
+    filepath = os.path.join(folder, filename)
+
+    # 检查文件是否存在
+    if not os.path.exists(filepath):
+        print(f"文件 {filepath} 不存在")
+        return None
+    try:
+        # 读取Excel文件
+        excel_file = pd.ExcelFile(filepath)
+
+        # 如果没有指定股票代码，则读取所有工作表
+        if stock_codes is None:
+            stock_codes = excel_file.sheet_names
+
+        # 创建存储数据的字典
+        stock_data = {}
+
+        # 读取指定的工作表
+        for code in stock_codes:
+            if code in excel_file.sheet_names:
+                # 读取数据，第一列作为索引
+                df = pd.read_excel(filepath, sheet_name=code, index_col=0)
+                stock_data[code] = df
+                print(f"成功读取 {code} 的数据，共 {len(df)} 行")
+            else:
+                print(f"工作表 {code} 不存在")
+
+        print(f"总共读取了 {len(stock_data)} 只股票的数据")
+        return stock_data
+
+    except Exception as e:
+        print(f"读取文件时出错: {e}")
+        return None
 
 def get_a_stock_list():
     """
@@ -184,10 +216,13 @@ def get_all_stocks_data(stock_list, frequency='1d', count=10, max_workers=10):
 
     return stock_data
 if __name__ == '__main__':
-
-    df=get_a_stock_list()
-    print('所有股票代码\n',df)
-    df=get_all_stocks_data(df)
-    save_stock_data( df)
+    df=get_stock_data()
+    print('所有股票数据\n',df)
+    for key,value in df.items():
+        print(key,'\n',value)
+    # df=get_a_stock_list()
+    # print('所有股票代码\n',df)
+    # df=get_all_stocks_data(df)
+    # save_stock_data( df)
 
 

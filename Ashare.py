@@ -44,8 +44,15 @@ def get_price_sina(code, end_date='', count=10, frequency='60m'):    #新浪全�
         unit=4 if frequency=='1200m' else 29 if frequency=='7200m' else 1    #4,29多几个数据不影响速度
         count=count+(datetime.datetime.now()-end_date).days//unit            #结束时间到今天有多少天自然日(肯定 >交易日)        
         #print(code,end_date,count)    
-    URL=f'http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={code}&scale={ts}&ma=5&datalen={count}' 
-    dstr= json.loads(requests.get(URL).content);
+    URL=f'http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={code}&scale={ts}&ma=5&datalen={count}'
+    try:
+        content=requests.get(URL).content
+        dstr= json.loads(content)
+    except Exception as e:
+        print(f"错误: {e}")
+        # print(f'获取数据失败，请检查网络或参数',URL)
+        # print('响应信息:',content)
+        return e
     #df=pd.DataFrame(dstr,columns=['day','open','high','low','close','volume'],dtype='float') 
     df= pd.DataFrame(dstr,columns=['day','open','high','low','close','volume'])
     df['open'] = df['open'].astype(float); df['high'] = df['high'].astype(float);                          #转换数据类型
@@ -143,7 +150,7 @@ def get_a_stock_list():
     """
     # 通过 sina 获取股票列表的一种方法
     stock_list = []
-
+    stock_name= []
     # 沪市A股 (sh60xxxx, sh68xxxx)
     # 深市A股 (sz00xxxx, sz30xxxx, sz002xxxx)
     prefixes = [
@@ -151,7 +158,10 @@ def get_a_stock_list():
         'sz00',  # 深市主板/中小板
         'sz002'  # 深市中小板
     ]
-
+    prename={
+        "ST",
+        "*ST"
+    }
     # 或者通过网络接口获取完整列表
     try:
         i = 1
@@ -163,12 +173,13 @@ def get_a_stock_list():
             end_time = time.perf_counter()
             if end_time - start_time <1 :
                 time.sleep(0.5)
-            if len(data) == 0 or len(stock_list)>=500:
+            if len(data) == 0: #获取数据条数 自测只拿500
                 break
             else:i=i+1
-            stock_list =stock_list + [item['symbol'] for item in data]
+            stock_list = stock_list+ [item['symbol'] for item in data]
+            stock_name = stock_name+ [item['name'] for item in data]
             print(f"获取到 {len(stock_list)} 条 总数据")
-        stock_list = [stock for stock in stock_list if stock.startswith(tuple(prefixes))]
+        stock_list = [stock for stock,name in zip(stock_list,stock_name) if stock.startswith(tuple(prefixes)) and not name.startswith(tuple(prename))]
         print(f"实际获取到 {len(stock_list)} 条 总数据")
         return stock_list
     except:
@@ -180,7 +191,7 @@ def get_a_stock_list():
 # stock_list = get_a_stock_list()
 # print(f"获取到 {len(stock_list)} 只股票")
 
-def get_all_stocks_data(stock_list, frequency='1d', count=10, max_workers=10):
+def get_all_stocks_data(stock_list, frequency='1d', count=30, max_workers=30):
     """
     批量获取所有股票走势数据
 
@@ -196,11 +207,24 @@ def get_all_stocks_data(stock_list, frequency='1d', count=10, max_workers=10):
     stock_data = {}
     end_date = ''
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # 提交所有任务
-        future_to_stock = {
-            executor.submit(get_price, stock,end_date,  count,frequency): stock
-            for stock in stock_list[:10] # 先测试前100只股票
-        }
+        future_to_stock = {}
+
+        # 分批处理股票列表
+        batch_size = max_workers  # 每批处理max_workers个股票
+
+        for i in range(0, len(stock_list), batch_size):
+            # 获取当前批次的股票
+            batch = stock_list[i:i + batch_size]
+
+            # 提交当前批次的任务
+            for stock in batch:
+                future = executor.submit(get_price, stock, end_date, count, frequency)
+                future_to_stock[future] = stock
+
+            # 如果这是满批次（不是最后一批），则睡眠
+            if len(batch) == batch_size and i + batch_size < len(stock_list):
+                time.sleep(0.5)
+                print(f"批次 {i // batch_size + 1} 已提交，睡眠0.2秒...")
 
         # 收集结果
         for future in as_completed(future_to_stock):
@@ -216,10 +240,9 @@ def get_all_stocks_data(stock_list, frequency='1d', count=10, max_workers=10):
 
     return stock_data
 if __name__ == '__main__':
-    df=get_stock_data()
-    print('所有股票数据\n',df)
-    for key,value in df.items():
-        print(key,'\n',value)
+    strcode=get_a_stock_list()
+    df=get_all_stocks_data(strcode)
+    save_stock_data( df)
     # df=get_a_stock_list()
     # print('所有股票代码\n',df)
     # df=get_all_stocks_data(df)

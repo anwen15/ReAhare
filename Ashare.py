@@ -1,12 +1,14 @@
-#-*- coding:utf-8 -*-    --------------Ashare 股票行情数据双核心版( https://github.com/mpquant/Ashare ) 
-import json,requests,datetime,time;
+#-*- coding:utf-8 -*-    --------------Ashare 股票行情数据双核心版( https://github.com/mpquant/Ashare )
+import datetime
+import json
 import os
+import requests
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from pathlib import Path
-from openpyxl import *
 
 import pandas as pd  #
-from IPython.utils import data
 
 
 #腾讯日线
@@ -239,10 +241,33 @@ def get_all_stocks_data(stock_list, frequency='1d', count=30, max_workers=5):
             time.sleep(0.1)
 
     return stock_data
+
+def get_ZTPool():
+    # 获取当前日期时间
+    now = datetime.now()
+
+    # 格式化为 yyyy-mm-dd
+    date_str = now.strftime("%Y-%m-%d")
+    requesturl="https://www.stockapi.com.cn/v1/base/ZTPool?date="+date_str
+    print(requesturl)
+    response = requests.get(requesturl)
+    data = response.json()
+    stock_data=data['data']
+    return stock_data
+
+'''
+todo
+获取的股票data解析通用股票data
+选股引擎（大规模）
+每天回归往日涨停池股票，由选股引擎判断权重决定存储单元
+存储单元为：每天涨停池股票共五个，今日重点关注股票，往期股票权重增加，妖股池
+'''
+
 if __name__ == '__main__':
-    strcode=get_a_stock_list()
-    df=get_all_stocks_data(strcode)
-    save_stock_data( df)
+    get_ZTPool()
+    # strcode=get_a_stock_list()
+    # df=get_all_stocks_data(strcode)
+    # save_stock_data( df)
     # df=get_a_stock_list()
     # print('所有股票代码\n',df)
     # df=get_all_stocks_data(df)

@@ -191,7 +191,7 @@ def get_a_stock_list():
 # stock_list = get_a_stock_list()
 # print(f"获取到 {len(stock_list)} 只股票")
 
-def get_all_stocks_data(stock_list, frequency='1d', count=30, max_workers=30):
+def get_all_stocks_data(stock_list, frequency='1d', count=30, max_workers=5):
     """
     批量获取所有股票走势数据
 
@@ -223,7 +223,7 @@ def get_all_stocks_data(stock_list, frequency='1d', count=30, max_workers=30):
 
             # 如果这是满批次（不是最后一批），则睡眠
             if len(batch) == batch_size and i + batch_size < len(stock_list):
-                time.sleep(0.5)
+                time.sleep(5.0)
                 print(f"批次 {i // batch_size + 1} 已提交，睡眠0.2秒...")
 
         # 收集结果
